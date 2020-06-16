@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# $1 domain
+# $2 problem
+# $3 plans folder
+# $4 number of plans in the folder (N)
+# $5 number of plans to choose (M<=N)
+# $6 (optional) plan file name - default is sas_plan
+## Assuming plan files are named <plan file name>.1 ... <plan file name>.N 
+
+if [ "$#" -lt 5 ]; then
+    echo "Illegal number of parameters"
+    exit 1
+fi
+
+if [ "$#" -gt 6 ]; then
+    echo "Illegal number of parameters"
+    exit 1
+fi
+
+if [ "$5" -gt "$4" ]; then
+    echo "Illegal parameter - subset size cannot be greater than the set size"
+    exit 1
+fi
+
+FNAME=""
+if [ "$#" -eq 6 ]; then
+    FNAME="--internal-plan-file "$6
+fi
+
+SCORE="subset(compute_stability_metric=true,aggregator_metric=avg,plans_as_multisets=false,plans_subset_size=$5,exact_method=false,dump_plans=true)"
+
+
+SOURCE="$( dirname "${BASH_SOURCE[0]}" )"
+$SOURCE/fast-downward.py $1 $2 --diversity-score $SCORE --internal-plan-files-path $3 --internal-num-plans-to-read $4 $FNAME
+
+
