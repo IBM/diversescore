@@ -23,6 +23,7 @@ typedef std::unordered_map<int, size_t> plan_set;
 void add_diversity_score_options_to_parser(options::OptionParser &parser);
 void add_diversity_score_subset_options_to_parser(options::OptionParser &parser);
 void add_diversity_score_subset_bounded_options_to_parser(options::OptionParser &parser);
+void add_diversity_score_subset_optimal_options_to_parser(options::OptionParser &parser);
 
 class DiversityScore {
     const std::shared_ptr<AbstractTask> task;
@@ -32,6 +33,7 @@ class DiversityScore {
     StateRegistry state_registry;
     SearchSpace search_space;
 
+    int cost_bound;
     bool plans_as_multisets;
     bool use_cache;
     PlanManager plan_manager;

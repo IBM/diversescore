@@ -40,7 +40,7 @@ class DiversityScoreSubsetBounded : public DiversityScore {
     float metric_bound;
     ComputationalMethod computation_method;
     int plans_subset_size;
-    bool exact_mip_external;
+    // bool exact_mip_external;
     bool dump_plans;
 
     void generate_mip_file(std::vector<size_t>& selected_plan_indexes);

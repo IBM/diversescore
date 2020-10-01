@@ -131,6 +131,7 @@ void PlanManager::load_plans(std::vector<Plan> &plans, const TaskProxy &task_pro
         curr_filename << filename.str() << "." << plan_no;
         Plan plan;
         load_plan(plan, curr_filename.str(), ops_by_names);
+        cout << "Loaded plan " << curr_filename.str() << endl;
         plans.push_back(plan);
     }
 }

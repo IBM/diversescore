@@ -45,6 +45,11 @@ Additional example specifications:
 ./compute_stability_subset_bounded.sh domain.pddl problem.pddl found_plans 1000 100 0.25
 ```
 
+### Selecting subset for optimal diversity diverse planning
+```
+# ./compute_stability_subset_optimal.sh <domain> <problem> <plans-folder> <number-of-plans-in-folder> <number-of-plans-to-select> 
+./compute_stability_subset_bounded.sh domain.pddl problem.pddl found_plans 1000 100 
+```
 
 ## Licensing
 

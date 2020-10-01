@@ -55,7 +55,7 @@ int main(int argc, const char **argv) {
     engine->compute_metrics();
     utils::g_timer.stop();
 
-    cout << "Total time: " << utils::g_timer << endl;
+    cout << "Diversity score computation total time: " << utils::g_timer << endl;
 
     utils::report_exit_code_reentrant(ExitCode::SUCCESS);
     return static_cast<int>(ExitCode::SUCCESS);

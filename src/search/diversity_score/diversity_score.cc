@@ -25,6 +25,7 @@ DiversityScore::DiversityScore(const Options &opts) :
         task_proxy(*task),
         state_registry(task_proxy),
         search_space(state_registry),
+        cost_bound(opts.get<int>("cost_bound")),
         plans_as_multisets(opts.get<bool>("plans_as_multisets")),
         use_cache(opts.get<bool>("use_cache")),
         compute_states_metric(opts.get<bool>("compute_states_metric")),
@@ -50,13 +51,15 @@ void DiversityScore::compute_metrics_exact_set() {
                     if (!stability && !state && !uniqueness)
                         continue;
                     float cluster_score = compute_score_for_set(stability, state, uniqueness, selected_plan_indexes);
-                    cout << "Score: " << cluster_score << ", metrics " << get_metric_name(stability, state, uniqueness) << endl;
+                    // cout << "Score: " << cluster_score << ", metrics " << get_metric_name(stability, state, uniqueness) << endl;
+                    cout << "Score after clustering " << cluster_score << ", cluster size " << selected_plan_indexes.size() << ", metrics " << get_metric_name(stability, state, uniqueness) << endl;
                 }
             }
         }
     } else {
         float cluster_score = compute_score_for_set(compute_stability_metric, compute_states_metric, compute_uniqueness_metric, selected_plan_indexes);
-        cout << "Score: " << cluster_score << ", metrics " << get_metric_name(compute_stability_metric, compute_states_metric, compute_uniqueness_metric) << endl;
+        // cout << "Score: " << cluster_score << ", metrics " << get_metric_name(compute_stability_metric, compute_states_metric, compute_uniqueness_metric) << endl;
+        cout << "Score after clustering " << cluster_score << ", cluster size " << selected_plan_indexes.size() << ", metrics " << get_metric_name(compute_stability_metric, compute_states_metric, compute_uniqueness_metric) << endl;
     }
 }
 
@@ -65,11 +68,21 @@ void DiversityScore::read_plans() {
     plan_manager.load_plans(plans, task_proxy); 
 
     assert(_plans.empty());
-    // We start by removing non-unique plans
+    if (cost_bound >= 0) {
+        cout << "Specified cost bound, ignoring plans with cost under the bound" << endl;
+    }
+    // We start by removing non-unique plans    
     utils::HashSet<Plan> unique_plans;
     for (Plan plan : plans) {
+        if (cost_bound >= 0) {
+            int plan_cost = calculate_plan_cost(plan, task_proxy);
+            if (plan_cost > cost_bound) {
+                cout << "Skipping plan with cost above the bound (" << plan_cost << ")" << endl;
+                continue;
+            }
+        }
         unique_plans.insert(plan);
-    }    
+    }
     _plans.insert(_plans.begin(), unique_plans.begin(), unique_plans.end());
 
     cout << "Number of unique plans read is " << _plans.size() << " out of " << plans.size() << endl;
@@ -521,6 +534,10 @@ void add_diversity_score_options_to_parser(OptionParser &parser) {
     parser.add_option<bool>("all_metrics", "Computing all metrics", "false");
     parser.add_option<bool>("plans_as_multisets", "Treat plans as multisets instead of sets", "false");
     parser.add_option<bool>("use_cache", "Use cache when computing metrics", "true");
+
+    parser.add_option<int>("cost_bound",
+        "The bound on the cost of a plan",
+        "-1");
 }
 
 void add_diversity_score_subset_options_to_parser(OptionParser &parser) {
@@ -551,6 +568,20 @@ void add_diversity_score_subset_bounded_options_to_parser(OptionParser &parser) 
 
 
 }
+
+void add_diversity_score_subset_optimal_options_to_parser(OptionParser &parser) {
+
+    vector<string> computation_method;
+    computation_method.push_back("MIP");
+    computation_method.push_back("MIP_EXTERNAL");
+    parser.add_enum_option(
+        "metric_computation_method",
+        computation_method,
+        "Method for finding subset of plans with optimal metric score",
+        "MIP");
+
+}
+
 
 static PluginTypePlugin<DiversityScore> _type_plugin(
     "DiversityScore",
