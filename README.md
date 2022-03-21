@@ -51,6 +51,29 @@ Additional example specifications:
 ./compute_stability_subset_bounded.sh domain.pddl problem.pddl found_plans 1000 100 
 ```
 
+## Citing
+
+```
+@InProceedings{katz-sohrabi-aaai2020,
+  title =        "Reshaping diverse planning",
+  author =       "Michael Katz and Shirin Sohrabi",
+  booktitle =    "Proceedings of the Thirty-Fourth {AAAI} Conference on
+                  Artificial Intelligence ({AAAI} 2020)",
+  publisher =    "{AAAI} Press",
+  pages =        "9892--9899",
+  year =         "2020"
+}
+
+@InProceedings{katz-et-al-aaai2022,
+  title =        "Bounding Quality in Diverse Planning",
+  author =       "Michael Katz and Shirin Sohrabi and Octavian Udrea",
+  booktitle =    "Proceedings of the Thirty-Sixth {AAAI} Conference on
+                  Artificial Intelligence ({AAAI} 2022)",
+  publisher =    "{AAAI} Press",
+  year =         "2022"
+}
+```
+
 ## Licensing
 
 DiverseScore is a Automated PDDL planning tool for computing the score
