@@ -36,6 +36,9 @@ class DiversityScore {
     int cost_bound;
     bool plans_as_multisets;
     bool use_cache;
+    bool similarity;
+    bool discounted_prefixes;
+    float discount_factor;
     PlanManager plan_manager;
 
     std::unordered_map<size_t, std::unordered_map<size_t, float>> state_metric_cache;
@@ -43,12 +46,19 @@ class DiversityScore {
     std::unordered_map<size_t, std::unordered_map<size_t, float>> uniqueness_metric_cache;
 
     Plan get_plan(size_t ind) const;
+    size_t get_num_actions(const plan_set& set) const;
     size_t get_num_actions(size_t ind) const;
+    void plan_to_set(plan_set &set_a, const Plan &plan, bool plans_as_multisets) const;
 
-    float compute_jaccard_similarity_score(size_t plan_index1, size_t plan_index2);
+    float compute_stability_similarity_score(size_t plan_index1, size_t plan_index2);
+    float compute_jaccard_similarity_score(const plan_set& set_a, const plan_set& set_b) const;
+
     float compute_state_similarity_score(size_t plan_index1, size_t plan_index2);
-    float compute_state_similarity_score(StateID state1, StateID state2);
+    float compute_state_similarity_score(const std::vector<StateID>& plan_a, const std::vector<StateID>& plan_b) const;
+    float compute_state_similarity_score(StateID state1, StateID state2) const;
+
     float compute_uniqueness_similarity_score(size_t plan_index1, size_t plan_index2);
+    float compute_uniqueness_similarity_score(const plan_set& set_a, const plan_set& set_b) const;
 
     float get_state_from_cache(size_t plan_index1, size_t plan_index2) const;
     void add_state_to_cache(size_t plan_index1, size_t plan_index2, float value);
@@ -69,12 +79,25 @@ class DiversityScore {
     float compute_score_for_set_min(bool stability, bool state, bool uniqueness,
             const std::vector<size_t>& selected_plan_indexes);
 
+    float compute_discounted_prefix_similarity(bool stability, bool state, bool uniqueness,
+        const Plan& plan1, const Plan& plan2, float gamma) const;
+
+    // float compute_discounted_prefix_score_for_set_avg(bool stability, bool state, bool uniqueness,
+    //     const vector<size_t>& selected_plan_indexes, float gamma) const;
+
+    // float compute_discounted_prefix_score_for_set_min(bool stability, bool state, bool uniqueness,
+    //     const vector<size_t>& selected_plan_indexes, float gamma) const;
+    float compute_similarity_for_prefix_no_cache(bool stability, bool state, bool uniqueness,
+        const Plan& plan1, const Plan& plan2) const;
+        
 protected:
+    int plans_seed_set_size;
     bool compute_states_metric;
     bool compute_stability_metric;
     bool compute_uniqueness_metric;
 
     Aggregator aggregator_metric;
+    bool dump_pairs;
     bool all_metrics;
 
     std::vector<std::vector<StateID>> plan_traces;

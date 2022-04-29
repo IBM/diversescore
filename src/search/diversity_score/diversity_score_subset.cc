@@ -75,6 +75,46 @@ void DiversityScoreSubset::compute_metrics() {
 
 
 
+void DiversityScoreSubset::seed_with_best_pair(bool stability, bool state, bool uniqueness,
+            vector<size_t>& selected_plan_indexes, list<size_t>& candidates) {
+    // First, selecting a pair of plans with a maximal diversity
+    float best_score = 0.0;
+    size_t best_i = 0;
+    size_t best_j = 1;
+
+    for (size_t i = 0; i < plans_sets.size() - 1; ++i) {
+        for (size_t j = i+1; j < plans_sets.size(); ++j) {
+            float current_score = compute_score_for_pair(stability, state, uniqueness, i, j);
+            if (current_score > best_score) {
+                best_score = current_score;
+                best_i = i;
+                best_j = j;
+            }
+        }
+    }
+
+    for (size_t i = 0; i < plans_sets.size(); ++i) {
+        if (i == best_i || i == best_j) {
+            selected_plan_indexes.push_back(i);
+        } else {
+            candidates.push_back(i);
+        }
+    }
+}
+
+
+
+void DiversityScoreSubset::seed_with_first_plans(vector<size_t>& selected_plan_indexes, list<size_t>& candidates, size_t num_plans) {
+
+    for (size_t i = 0; i < plans_sets.size(); ++i) {
+        if (i < num_plans) {
+            selected_plan_indexes.push_back(i);
+        } else {
+            candidates.push_back(i);
+        }
+    }
+}
+
 void DiversityScoreSubset::compute_metrics_greedy(bool stability, bool state, bool uniqueness,
             vector<size_t>& selected_plan_indexes) {
 
@@ -92,30 +132,15 @@ void DiversityScoreSubset::compute_metrics_greedy(bool stability, bool state, bo
     }
 
     // Applying a simple greedy algorithm for selecting plans one by one, until number_of_plans are chosen or plans_sets.size() is reached.
-    // First, selecting a pair of plans with a maximal diversity
-    float best_score = 0.0;
-    size_t best_i = 0;
-    size_t best_j = 1;
 
-    for (size_t i = 0; i < plans_sets.size() - 1; ++i) {
-        for (size_t j = i+1; j < plans_sets.size(); ++j) {
-            float current_score = compute_score_for_pair(stability, state, uniqueness, i, j);
-            if (current_score > best_score) {
-                best_score = current_score;
-                best_i = i;
-                best_j = j;
-            }
-        }
-    }
-    // Choosing the two plans
-    selected_plan_indexes.push_back(best_i);
-    selected_plan_indexes.push_back(best_j);
     list<size_t> candidates;
-    for (size_t i = 0; i < plans_sets.size(); ++i) {
-        if (i == best_i || i == best_j)
-            continue;
-        candidates.push_back(i);
+    if (plans_seed_set_size > 0) {
+        cout << "Seeding with first "<< plans_seed_set_size << " plans" << endl;
+        seed_with_first_plans(selected_plan_indexes, candidates, (size_t)plans_seed_set_size);
+    } else {
+        seed_with_best_pair(stability, state, uniqueness, selected_plan_indexes, candidates);
     }
+
 
     while (true) {
         // Finding best match
@@ -221,6 +246,7 @@ pair<float, size_t> DiversityScoreSubset::find_best_next_candidate(bool stabilit
         const std::vector<size_t>& selected_plan_indexes, list<size_t>& candidates) {
     // Going over all candidates, check if not already chosen, compute the score, return the best one
     float best_score = 0.0;
+    // cout << "Finding best candidate out of " << candidates.size() << endl;
     size_t best_candidate = plans_sets.size();
     std::list<size_t>::iterator best_candidate_it;
     std::list<size_t>::iterator it = candidates.begin();
@@ -229,7 +255,13 @@ pair<float, size_t> DiversityScoreSubset::find_best_next_candidate(bool stabilit
         // computing the score as a sum over scores with the existing elements
         float current_score = 0.0;
         for (size_t j : selected_plan_indexes) {
-            current_score += compute_score_for_pair(stability, state, uniqueness, i, j);
+            float res = compute_score_for_pair(stability, state, uniqueness, i, j);
+            current_score += res;
+            size_t plan_ind1 = ordered_plan_indexes[i].first;
+            size_t plan_ind2 = ordered_plan_indexes[j].first;
+            if (dump_pairs)
+                cout << "Score for pair " << plan_ind1 <<", " << plan_ind2 << ": " << res << endl;
+
         }
         //cout << "Current score: " << current_score << ", candidate " << i << endl;
         if (current_score > best_score) {

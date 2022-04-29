@@ -51,6 +51,17 @@ Additional example specifications:
 ./compute_stability_subset_bounded.sh domain.pddl problem.pddl found_plans 1000 100 
 ```
 
+### Selecting subset with a discounted prefix similarity 
+```
+--diversity-score "subset(compute_stability_metric=true,aggregator_metric=avg,plans_as_multisets=false,plans_subset_size=3,exact_method=false,dump_plans=true,discounted_prefixes=true, discount_factor=0.9)" --internal-plan-files-path plans --internal-num-plans-to-read 10
+```
+
+### Selecting subset with a seed set (first x plans)
+```
+--diversity-score "subset(compute_stability_metric=true,aggregator_metric=avg,plans_as_multisets=false,plans_subset_size=3,exact_method=false,dump_plans=true,plans_seed_set_size=2)" --internal-plan-files-path plans --internal-num-plans-to-read 10
+```
+
+
 ## Citing
 
 ```

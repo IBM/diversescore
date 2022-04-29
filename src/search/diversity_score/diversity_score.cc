@@ -28,10 +28,15 @@ DiversityScore::DiversityScore(const Options &opts) :
         cost_bound(opts.get<int>("cost_bound")),
         plans_as_multisets(opts.get<bool>("plans_as_multisets")),
         use_cache(opts.get<bool>("use_cache")),
+        similarity(opts.get<bool>("similarity")),
+        discounted_prefixes(opts.get<bool>("discounted_prefixes")),
+        discount_factor((float)opts.get<double>("discount_factor")),
+        plans_seed_set_size(opts.get<int>("plans_seed_set_size")),
         compute_states_metric(opts.get<bool>("compute_states_metric")),
         compute_stability_metric(opts.get<bool>("compute_stability_metric")),
         compute_uniqueness_metric(opts.get<bool>("compute_uniqueness_metric")),
         aggregator_metric(Aggregator(opts.get_enum("aggregator_metric"))),
+        dump_pairs(opts.get<bool>("dump_pairs")),
         all_metrics(opts.get<bool>("all_metrics")) 
 {
 
@@ -81,12 +86,12 @@ void DiversityScore::read_plans() {
                 continue;
             }
         }
-        unique_plans.insert(plan);
+        auto it = unique_plans.insert(plan);
+        if (it.second) {
+            _plans.push_back(plan);
+        }
     }
-    _plans.insert(_plans.begin(), unique_plans.begin(), unique_plans.end());
-
     cout << "Number of unique plans read is " << _plans.size() << " out of " << plans.size() << endl;
-
     prepare_plans();
 }
 
@@ -125,7 +130,10 @@ string DiversityScore::get_metric_name(bool stability, bool state, bool uniquene
     } else {
         cerr << "At least one of average or minimum should be selected for aggregation method" << endl;
         utils::exit_with(utils::ExitCode::SEARCH_INPUT_ERROR);
-    }    
+    }
+    if (discounted_prefixes) {
+        name += " discounting prefixes";
+    }
     return name;
 }
 
@@ -139,6 +147,8 @@ void DiversityScore::prepare_plans() {
     for (size_t it = 0; it < _plans.size(); ++it) {
         auto plan = _plans[it];
         int plan_cost = calculate_plan_cost(plan, task_proxy);
+        if (plans_seed_set_size > 0 && it < (size_t)plans_seed_set_size)
+            plan_cost = -1;  // 0 would work too...
         ordered_plan_indexes.push_back(make_pair(it,plan_cost));
     }
     sort(ordered_plan_indexes.begin(), ordered_plan_indexes.end(), cmp_plans);
@@ -157,20 +167,26 @@ void DiversityScore::prepare_plans() {
     for (auto plan_index : ordered_plan_indexes) {
         auto plan = _plans[plan_index.first];
         plan_set set_a;
-        for (auto op : plan) {
-            int op_no = op.get_index();
-            size_t num_elems = 1;
-            if (plans_as_multisets) {
-                auto e = set_a.find(op_no);
-                if (e != set_a.end()) {
-                    num_elems = e->second + 1;
-                }
-            }
-            set_a[op_no] = num_elems;
-        }
+        plan_to_set(set_a, plan, plans_as_multisets);
         plans_sets.push_back(set_a);
     }
 }
+
+
+void DiversityScore::plan_to_set(plan_set &set_a, const Plan &plan, bool plans_as_multisets) const {
+    for (auto op : plan) {
+        int op_no = op.get_index();
+        size_t num_elems = 1;
+        if (plans_as_multisets) {
+            auto e = set_a.find(op_no);
+            if (e != set_a.end()) {
+                num_elems += e->second;
+            }
+        }
+        set_a[op_no] = num_elems;
+    }
+}
+
 
 void DiversityScore::print_plans(const std::vector<size_t>& selected_plan_indexes) {
     for (size_t ind : selected_plan_indexes) {
@@ -193,9 +209,18 @@ void DiversityScore::print_all_plans() {
 }
 
 
+size_t DiversityScore::get_num_actions(const plan_set& actions_set) const {
+    size_t set_size = 0;
+    for (auto ea : actions_set) {
+        set_size += ea.second;
+    }
+    return set_size;
+}
+
 size_t DiversityScore::get_num_actions(size_t ind) const {
     return get_plan(ind).size();
 }
+
 
 Plan DiversityScore::get_plan(size_t ind) const {
     size_t plan_ind = ordered_plan_indexes[ind].first;
@@ -223,8 +248,12 @@ float DiversityScore::compute_score_for_set_avg(bool stability, bool state, bool
     for (size_t i=0; i < selected_plan_indexes.size() - 1; ++i) {
         for (size_t j=i+1; j < selected_plan_indexes.size(); ++j) {
             count_pairs++;
-            res += compute_score_for_pair(stability, state, uniqueness, selected_plan_indexes[i], selected_plan_indexes[j]);
-            //cout << "res: " << res << endl;
+            float r = compute_score_for_pair(stability, state, uniqueness, selected_plan_indexes[i], selected_plan_indexes[j]);
+            size_t plan_ind1 = ordered_plan_indexes[selected_plan_indexes[i]].first;
+            size_t plan_ind2 = ordered_plan_indexes[selected_plan_indexes[j]].first;
+            if (dump_pairs)
+                cout << "Score for pair " << plan_ind1 <<", " << plan_ind2 << ": " << r << endl;
+            res += r;
         }
     }
     return res / (float) count_pairs;
@@ -240,6 +269,10 @@ float DiversityScore::compute_score_for_set_min(bool stability, bool state, bool
     for (size_t i=0; i < selected_plan_indexes.size() - 1; ++i) {
         for (size_t j=i+1; j < selected_plan_indexes.size(); ++j) {
             float res = compute_score_for_pair(stability, state, uniqueness, selected_plan_indexes[i], selected_plan_indexes[j]);
+            size_t plan_ind1 = ordered_plan_indexes[selected_plan_indexes[i]].first;
+            size_t plan_ind2 = ordered_plan_indexes[selected_plan_indexes[j]].first;
+            if (dump_pairs)
+                cout << "Score for pair " << plan_ind1 <<", " << plan_ind2 << ": " << res << endl;
             if (res < min_res)
                 min_res = res;
         }
@@ -248,14 +281,105 @@ float DiversityScore::compute_score_for_set_min(bool stability, bool state, bool
 }
 
 
+float DiversityScore::compute_discounted_prefix_similarity(bool stability, bool state, bool uniqueness,
+        const Plan& plan1, const Plan& plan2, float gamma) const {
+
+    size_t m = min(plan1.size(), plan2.size());
+    float res = 0.0;
+    float gamma_to_i = 1.0;
+    Plan prefix1, prefix2;
+    for (size_t i=0; i<m; ++i) {
+        gamma_to_i *= gamma;
+        prefix1.push_back(plan1[i]);
+        prefix2.push_back(plan2[i]);
+
+        // OperatorsProxy operators = task_proxy.get_operators();
+        // cout <<"Prefix1:";
+
+        // for (OperatorID a : prefix1) {
+        //     cout << "  " << operators[a].get_name();
+        // }
+        // cout << endl << "Prefix2:";
+        // for (OperatorID a : prefix2) {
+        //     cout << "  " << operators[a].get_name();
+        // }
+        // cout << endl;
+
+        float s = compute_similarity_for_prefix_no_cache(stability, state, uniqueness, prefix1, prefix2);
+        res += s * gamma_to_i;
+        // cout << "i=" << i+1 << ", gamma^i="<<gamma_to_i << ", s=" << s<< ", res=" << res << endl;
+    }
+    gamma_to_i *= gamma;
+    float geosum = (gamma - gamma_to_i) / (1.0 - gamma);
+    float ret = res / geosum;
+    // cout << "S_m="<< geosum<< ", sym="<< ret << endl;
+    return 1.0 - ret;
+}
+
+float DiversityScore::compute_similarity_for_prefix_no_cache(bool stability, bool state, bool uniqueness,
+        const Plan& plan1, const Plan& plan2) const {
+
+    float divide_by = 0.0;
+    float res = 0.0;
+
+    plan_set set_a;
+    plan_set set_b;
+
+    if (stability || uniqueness) {
+        plan_to_set(set_a, plan1, plans_as_multisets);
+        plan_to_set(set_b, plan2, plans_as_multisets);
+    }
+
+    if (stability) {
+        divide_by++;
+        res += compute_jaccard_similarity_score(set_a, set_b);
+    }
+    if (state) {
+        divide_by++;
+        vector<StateID> trace_a;
+        vector<StateID> trace_b;
+
+        search_space.get_states_trace_from_path(plan1, trace_a, task_proxy);
+        search_space.get_states_trace_from_path(plan2, trace_b, task_proxy);
+        res += compute_state_similarity_score(trace_a, trace_b);
+    }
+    if (uniqueness) {
+        divide_by++;
+        res += compute_uniqueness_similarity_score(set_a, set_b);
+    }
+
+    float ret = (res / divide_by);
+    //cout << "Score for a pair: " << ret << ", indices " << plan_index1 << ", " << plan_index2 << endl;
+    if (ret > 1.0) {
+        cout << "Negative score between plans:" << endl;
+        OperatorsProxy operators = task_proxy.get_operators();
+        for (OperatorID a : plan1) {
+            cout << operators[a].get_name() <<  endl;
+        }
+        cout << " ----------- " << endl;
+        for (OperatorID a : plan2) {
+            cout << operators[a].get_name() <<  endl;
+        }
+        cout << "-------------------------------- " << endl;
+    }
+    return ret;
+}
+
+
 float DiversityScore::compute_score_for_pair(bool stability, bool state, bool uniqueness,
         size_t plan_index1, size_t plan_index2) {
+
+    if (discounted_prefixes) {
+        float ret = compute_discounted_prefix_similarity(stability, state, uniqueness, get_plan(plan_index1), get_plan(plan_index2), discount_factor);
+        return similarity ? 1.0 - ret: ret;
+
+    }
 
     float divide_by = 0.0;
     float res = 0.0;
     if (stability) {
         divide_by++;
-        float stab = compute_jaccard_similarity_score(plan_index1, plan_index2);
+        float stab = compute_stability_similarity_score(plan_index1, plan_index2);
         res += stab;
     }
     if (state) {
@@ -269,7 +393,7 @@ float DiversityScore::compute_score_for_pair(bool stability, bool state, bool un
 
     float ret = 1.0 - (res / divide_by);
     //cout << "Score for a pair: " << ret << ", indices " << plan_index1 << ", " << plan_index2 << endl;
-    if (ret < 0.0) {
+    if (ret < 0.0 || ret > 1.0) {
         cout << "Negative score between plans:" << endl;
         OperatorsProxy operators = task_proxy.get_operators();
         for (OperatorID a : get_plan(plan_index1)) {
@@ -281,12 +405,34 @@ float DiversityScore::compute_score_for_pair(bool stability, bool state, bool un
         }
         cout << "-------------------------------- " << endl;
     }
-    return ret;
+    return similarity ? 1.0 - ret: ret;
+}
+
+float DiversityScore::compute_uniqueness_similarity_score(const plan_set& set_a, const plan_set& set_b) const {
+    // Check if the plans are equal as sets or one contains in another
+    if (set_a.size() < set_b.size())
+        return compute_uniqueness_similarity_score(set_b, set_a);
+
+    if (set_a.size() == 0 && set_b.size() == 0)
+        return 1.0;
+
+    if (set_a.size() == 0 || set_b.size() == 0)
+        return 0.0;
+
+    // Here, set_b.size() <= set_a.size(), so checking if b is subset of a
+    for (auto eb : set_b) {
+        auto ea = set_a.find(eb.first);
+        if ( ea == set_a.end() || ea->second < eb.second) {
+            // There is an element in b that is not in a, unique
+            return 0.0;
+        }
+    }
+    // All elements of b are in a
+    return 1.0;
 }
 
 float DiversityScore::compute_uniqueness_similarity_score(size_t plan_index1, size_t plan_index2) {
     // Check if the plans are equal as sets or one contains in another
-
     const plan_set& set_a = plans_sets[plan_index1];
     const plan_set& set_b = plans_sets[plan_index2];
 
@@ -304,24 +450,12 @@ float DiversityScore::compute_uniqueness_similarity_score(size_t plan_index1, si
     if (ret >= 0.0)
         return ret;
 
-    // Here, set_b.size() <= set_a.size(), so checking if b is subset of a
-    for (auto eb : set_b) {
-        auto ea = set_a.find(eb.first);
-        if ( ea == set_a.end() || ea->second < eb.second) {
-            // There is an element in b that is not in a, unique
-            add_uniqueness_to_cache(plan_index1, plan_index2, 0.0);
-            return 0.0;
-        }
-    }
-    // All elements of b are in a
-    add_uniqueness_to_cache(plan_index1, plan_index2, 1.0);
-    return 1.0;
+    ret = compute_uniqueness_similarity_score(set_a, set_b);
+    add_uniqueness_to_cache(plan_index1, plan_index2, ret);
+    return ret;
 }
 
-float DiversityScore::compute_jaccard_similarity_score(size_t plan_index1, size_t plan_index2) {
-    const plan_set& set_a = plans_sets[plan_index1];
-    const plan_set& set_b = plans_sets[plan_index2];
-
+float DiversityScore::compute_jaccard_similarity_score(const plan_set& set_a, const plan_set& set_b) const {
     if (set_a.size() == 0 && set_b.size() == 0)
         return 1.0;
 
@@ -329,12 +463,7 @@ float DiversityScore::compute_jaccard_similarity_score(size_t plan_index1, size_
         return 0.0;
 
     if (set_a.size() < set_b.size())
-        return compute_jaccard_similarity_score(plan_index2, plan_index1);
-
-    // Try to take from cache;
-    float ret = get_stability_from_cache(plan_index1, plan_index2);
-    if (ret >= 0.0)
-        return ret;
+        return compute_jaccard_similarity_score(set_b, set_a);
 
     size_t set_b_minus_a_size = 0;
     for (auto eb : set_b) {
@@ -345,19 +474,59 @@ float DiversityScore::compute_jaccard_similarity_score(size_t plan_index1, size_
             set_b_minus_a_size += eb.second - ea->second;
         }         
     }
-    size_t set_a_size = (plans_as_multisets) ? get_num_actions(plan_index1) : set_a.size();
-    size_t set_b_size = (plans_as_multisets) ? get_num_actions(plan_index2) : set_b.size();
+
+    size_t set_a_size = (plans_as_multisets) ? get_num_actions(set_a) : set_a.size();
+    size_t set_b_size = (plans_as_multisets) ? get_num_actions(set_b) : set_b.size();
     
     size_t union_size = set_a_size + set_b_minus_a_size;
     size_t intersection_size = set_b_size - set_b_minus_a_size;
     //cout << "Union: " << union_size << ", intersection: " << intersection_size << endl;
     assert (union_size >= intersection_size);
+    return (float) intersection_size / (float) union_size;
+}
 
-    ret = (float) intersection_size / (float) union_size;
+float DiversityScore::compute_stability_similarity_score(size_t plan_index1, size_t plan_index2) {
+    const plan_set& set_a = plans_sets[plan_index1];
+    const plan_set& set_b = plans_sets[plan_index2];
+
+    if (set_a.size() == 0 && set_b.size() == 0)
+        return 1.0;
+
+    if (set_a.size() == 0 || set_b.size() == 0)
+        return 0.0;
+
+    if (set_a.size() < set_b.size())
+        return compute_stability_similarity_score(plan_index2, plan_index1);
+
+    // Try to take from cache;
+    float ret = get_stability_from_cache(plan_index1, plan_index2);
+    if (ret >= 0.0)
+        return ret;
+
+    ret = compute_jaccard_similarity_score(set_a, set_b);
 
     add_stability_to_cache(plan_index1, plan_index2, ret);
 
     return ret;
+}
+
+float DiversityScore::compute_state_similarity_score(const vector<StateID>& plan_a, const vector<StateID>& plan_b) const {
+    if (plan_a.size() == 0 && plan_b.size() == 0)
+        return 1.0;
+
+    if (plan_a.size() == 0 || plan_b.size() == 0)
+        return 0.0;
+
+    if (plan_a.size() > plan_b.size())
+        return compute_state_similarity_score(plan_b, plan_a);
+
+    // Here, plan_a.size() <= plan_b.size()
+    //float sum = (float) (plan_b.size() - plan_a.size());
+    float sum = 0.0;
+    for (size_t i = 0; i < plan_a.size(); ++i) {
+        sum += compute_state_similarity_score(plan_a[i], plan_b[i]);
+    }
+    return sum / (float) plan_b.size();
 }
 
 float DiversityScore::compute_state_similarity_score(size_t plan_index1, size_t plan_index2) {
@@ -376,14 +545,7 @@ float DiversityScore::compute_state_similarity_score(size_t plan_index1, size_t 
     float ret = get_state_from_cache(plan_index1, plan_index2);
     if (ret >= 0.0)
         return ret;
-    // Here, plan_a.size() <= plan_b.size()
-    //float sum = (float) (plan_b.size() - plan_a.size());
-    float sum = 0.0;
-    for (size_t i = 0; i < plan_a.size(); ++i) {
-        sum += compute_state_similarity_score(plan_a[i], plan_b[i]);
-    }
-
-    ret = sum / (float) plan_b.size();
+    ret = compute_state_similarity_score(plan_a, plan_b);
     // Add to cache
     add_state_to_cache(plan_index1, plan_index2, ret);
     return ret;
@@ -489,7 +651,7 @@ bool DiversityScore::is_none_of_those(int var, int val) const {
     return task->get_fact_name(FactPair(var, val)) == "none_of_those";
 }
 
-float DiversityScore::compute_state_similarity_score(StateID state1, StateID state2) {
+float DiversityScore::compute_state_similarity_score(StateID state1, StateID state2) const {
     GlobalState s1 = state_registry.lookup_state(state1);
     GlobalState s2 = state_registry.lookup_state(state2);
     int num_vars = state_registry.get_num_variables();
@@ -522,6 +684,9 @@ void add_diversity_score_options_to_parser(OptionParser &parser) {
     parser.add_option<bool>("compute_stability_metric", "Computing the metric stability", "false");
     parser.add_option<bool>("compute_uniqueness_metric", "Computing the metric uniqueness", "false");
 
+    parser.add_option<bool>("similarity", "Computing similarity instead of dissimilarity", "false");
+    parser.add_option<bool>("dump_pairs", "Dumping the score of each pair", "false");
+
     vector<string> aggregator;
     aggregator.push_back("AVG");
     aggregator.push_back("MIN");
@@ -535,9 +700,17 @@ void add_diversity_score_options_to_parser(OptionParser &parser) {
     parser.add_option<bool>("plans_as_multisets", "Treat plans as multisets instead of sets", "false");
     parser.add_option<bool>("use_cache", "Use cache when computing metrics", "true");
 
+    parser.add_option<bool>("discounted_prefixes", "Computing discounted prefixes metric", "false");
+    parser.add_option<double>("discount_factor", "Discount factor", "0.99");
+
+
     parser.add_option<int>("cost_bound",
         "The bound on the cost of a plan",
         "-1");
+
+    parser.add_option<int>("plans_seed_set_size",
+        "The number of plans to seed the selection with",
+        "0");
 }
 
 void add_diversity_score_subset_options_to_parser(OptionParser &parser) {

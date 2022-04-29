@@ -50,6 +50,11 @@ class DiversityScoreSubset : public DiversityScore {
     std::pair<float, size_t> find_best_next_candidate(bool stability, bool state, bool uniqueness,
             const std::vector<size_t>& selected_plan_indexes, std::list<size_t>& candidates);
 
+    void seed_with_best_pair(bool stability, bool state, bool uniqueness,
+            std::vector<size_t>& selected_plan_indexes, std::list<size_t>& candidates);
+
+    void seed_with_first_plans(std::vector<size_t>& selected_plan_indexes, std::list<size_t>& candidates, size_t num_plans);
+
 protected:
 
 public:
