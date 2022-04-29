@@ -29,6 +29,7 @@ DiversityScore::DiversityScore(const Options &opts) :
         plans_as_multisets(opts.get<bool>("plans_as_multisets")),
         use_cache(opts.get<bool>("use_cache")),
         similarity(opts.get<bool>("similarity")),
+        reduce_labels(opts.get<bool>("reduce_labels")),
         discounted_prefixes(opts.get<bool>("discounted_prefixes")),
         discount_factor((float)opts.get<double>("discount_factor")),
         plans_seed_set_size(opts.get<int>("plans_seed_set_size")),
@@ -39,7 +40,98 @@ DiversityScore::DiversityScore(const Options &opts) :
         dump_pairs(opts.get<bool>("dump_pairs")),
         all_metrics(opts.get<bool>("all_metrics")) 
 {
+    // Reading the label reduction from json
+    if (reduce_labels) {
+        if (compute_states_metric) {
+            cerr << "Label reduction is currently not implemented with states metric" << endl;
+            utils::exit_with(utils::ExitCode::SEARCH_INPUT_ERROR);
 
+        }
+        read_label_reduction(opts.get<string>("label_reduction_file"));
+    }
+}
+
+
+void DiversityScore::read_label_reduction(string file) {
+    cout << "Reading the label reduction from file " << file.c_str() << endl;
+    ifstream lr_file;
+    lr_file.open(file);
+    if (!lr_file.is_open()) {
+        throw std::system_error(errno, std::system_category(), "failed to open file");
+
+        cerr << "File is not open!" << endl;
+        utils::exit_with(utils::ExitCode::SEARCH_INPUT_ERROR);
+    }
+
+    std::unordered_map<string, utils::HashSet<OperatorID>> ops_by_reduced_labels;
+    std::unordered_map<string, OperatorID> ops_by_names;
+    plan_manager.get_ops_by_names(ops_by_names, task_proxy);
+
+    // Reading from CSV
+    string line;
+    while(std::getline(lr_file, line)) {
+        if (line.size() == 0 || line[0] == ';')
+            continue;
+
+        //  Splitting the line into two, operator and reduced label
+        vector<string> row;
+        string op_name, reduced_label;
+        stringstream line_to_stream(line);
+
+        while(std::getline(line_to_stream, op_name, ',')) {
+            row.push_back(op_name);
+        }
+        assert(row.size() == 2);
+        op_name = row[0];
+        reduced_label = row[1];
+
+        //cout << op_name << endl;
+        //  Getting the operator id from name
+        auto it = ops_by_names.find(op_name);
+        if (it == ops_by_names.end()) {
+            // Trying adding a trailing space
+            string op_name_trailing_space = op_name + " ";
+            it = ops_by_names.find(op_name_trailing_space);
+            if (it == ops_by_names.end()) {
+                cerr << "#" << op_name << "#   Operator not found!!!" << endl;
+                cerr << "Operator names:" << endl;
+                for (auto name : ops_by_names) {
+                    cerr << "#" << name.first << "#" << endl;
+                }
+                utils::exit_with(utils::ExitCode::SEARCH_INPUT_ERROR);
+            }
+        }
+        if (ops_by_reduced_labels.find(reduced_label) == ops_by_reduced_labels.end()) {
+            // Adding an empty set
+            ops_by_reduced_labels.insert(std::make_pair(reduced_label, utils::HashSet<OperatorID>()));
+        }
+        ops_by_reduced_labels[reduced_label].insert(it->second);
+    }
+
+    // Finding a representative for each class (no matter what the reduced label is)
+
+    for (std::pair<std::string, utils::HashSet<OperatorID>> rc : ops_by_reduced_labels) {
+        bool first = true;
+        OperatorID op_to(-1);
+        for (OperatorID op_from : rc.second) {
+            if (first) {
+                op_to = op_from;
+                first = false;
+            }
+            label_reduction.insert(std::make_pair(op_from, op_to));
+        }
+    }
+}
+
+OperatorID DiversityScore::get_reduced_label(OperatorID op) const {
+    if (!reduce_labels) {
+        return op;
+    }
+    auto it = label_reduction.find(op);
+    if (it == label_reduction.end()) {
+        return op;
+    }
+    return it->second;
 }
 
 
@@ -175,7 +267,7 @@ void DiversityScore::prepare_plans() {
 
 void DiversityScore::plan_to_set(plan_set &set_a, const Plan &plan, bool plans_as_multisets) const {
     for (auto op : plan) {
-        int op_no = op.get_index();
+        int op_no = get_reduced_label(op).get_index();
         size_t num_elems = 1;
         if (plans_as_multisets) {
             auto e = set_a.find(op_no);
@@ -703,6 +795,9 @@ void add_diversity_score_options_to_parser(OptionParser &parser) {
     parser.add_option<bool>("discounted_prefixes", "Computing discounted prefixes metric", "false");
     parser.add_option<double>("discount_factor", "Discount factor", "0.99");
 
+    parser.add_option<bool>("reduce_labels", "Perform label reduction", "false");
+    parser.add_option<string>("label_reduction_file", "CSV file containing the label reduction. \
+                                Computing the similarity based on reduced action sequences (stability/uniqueness)", "false");
 
     parser.add_option<int>("cost_bound",
         "The bound on the cost of a plan",

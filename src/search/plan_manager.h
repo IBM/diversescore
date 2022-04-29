@@ -30,6 +30,9 @@ public:
     void set_is_part_of_anytime_portfolio(bool is_part_of_anytime_portfolio);
     void set_num_previously_generated_plans(int num_previously_generated_plans);
 
+    void get_ops_by_names(std::unordered_map<std::string, OperatorID>& ops_by_names, const TaskProxy &task_proxy) const;
+
+
     /*
       Set generates_multiple_plan_files to true if the planner can find more than
       one plan and should number the plans as FILENAME.1, ..., FILENAME.n.

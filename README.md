@@ -61,6 +61,11 @@ Additional example specifications:
 --diversity-score "subset(compute_stability_metric=true,aggregator_metric=avg,plans_as_multisets=false,plans_subset_size=3,exact_method=false,dump_plans=true,plans_seed_set_size=2)" --internal-plan-files-path plans --internal-num-plans-to-read 10
 ```
 
+### Selecting subset using label reduction
+```
+--diversity-score "subset(compute_stability_metric=true,aggregator_metric=avg,plans_as_multisets=false,plans_subset_size=3,exact_method=false,dump_plans=true,label_reduction_file=lr.csv, reduce_labels=true)" --internal-plan-files-path plans --internal-num-plans-to-read 10
+```
+
 
 ## Citing
 

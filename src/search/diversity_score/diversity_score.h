@@ -37,6 +37,7 @@ class DiversityScore {
     bool plans_as_multisets;
     bool use_cache;
     bool similarity;
+    bool reduce_labels;
     bool discounted_prefixes;
     float discount_factor;
     PlanManager plan_manager;
@@ -44,6 +45,8 @@ class DiversityScore {
     std::unordered_map<size_t, std::unordered_map<size_t, float>> state_metric_cache;
     std::unordered_map<size_t, std::unordered_map<size_t, float>> stability_metric_cache;
     std::unordered_map<size_t, std::unordered_map<size_t, float>> uniqueness_metric_cache;
+
+    utils::HashMap<OperatorID, OperatorID> label_reduction;
 
     Plan get_plan(size_t ind) const;
     size_t get_num_actions(const plan_set& set) const;
@@ -89,7 +92,9 @@ class DiversityScore {
     //     const vector<size_t>& selected_plan_indexes, float gamma) const;
     float compute_similarity_for_prefix_no_cache(bool stability, bool state, bool uniqueness,
         const Plan& plan1, const Plan& plan2) const;
-        
+
+    void read_label_reduction(std::string file);
+
 protected:
     int plans_seed_set_size;
     bool compute_states_metric;
@@ -115,6 +120,7 @@ protected:
     float compute_score_for_set(bool stability, bool state, bool uniqueness,
             const std::vector<size_t>& selected_plan_indexes);
     void compute_metrics_exact_set();
+    OperatorID get_reduced_label(OperatorID op) const;
 
 public:
     DiversityScore(const options::Options &opts);

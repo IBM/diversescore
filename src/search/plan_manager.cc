@@ -111,9 +111,8 @@ void PlanManager::load_plan(Plan &plan, std::string path_to_plan_file,
     }
 }
 
-void PlanManager::load_plans(std::vector<Plan> &plans, const TaskProxy &task_proxy) const {
+void PlanManager::get_ops_by_names(std::unordered_map<string, OperatorID>& ops_by_names, const TaskProxy &task_proxy) const {
     // Creating a hashmap from operator names to pointers
-    std::unordered_map<string, OperatorID> ops_by_names;
     OperatorsProxy operators = task_proxy.get_operators();
     for (OperatorProxy op : operators) {
         ops_by_names.insert(std::make_pair<string, OperatorID>(op.get_name(), op.get_ancestor_operator_id(tasks::g_root_task.get())));
@@ -123,7 +122,12 @@ void PlanManager::load_plans(std::vector<Plan> &plans, const TaskProxy &task_pro
             utils::exit_with(utils::ExitCode::SEARCH_INPUT_ERROR);
         }
     }
+}
 
+
+void PlanManager::load_plans(std::vector<Plan> &plans, const TaskProxy &task_proxy) const {
+    std::unordered_map<string, OperatorID> ops_by_names;
+    get_ops_by_names(ops_by_names, task_proxy);
     ostringstream filename;
     filename << plan_foldername << "/" << plan_filename;
     for (int plan_no=1; plan_no <= num_plans_to_read; ++plan_no) {
