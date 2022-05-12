@@ -66,6 +66,9 @@ Additional example specifications:
 --diversity-score "subset(compute_stability_metric=true,aggregator_metric=avg,plans_as_multisets=false,plans_subset_size=3,exact_method=false,dump_plans=true,label_reduction_file=lr.csv, reduce_labels=true)" --internal-plan-files-path plans --internal-num-plans-to-read 10
 ```
 
+### Dump the found subset to JSON: add option ```json_file_to_dump=filename.json```
+
+<br><br><br>
 
 ## Citing
 
