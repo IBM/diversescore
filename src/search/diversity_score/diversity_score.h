@@ -48,7 +48,7 @@ class DiversityScore {
 
     utils::HashMap<OperatorID, OperatorID> label_reduction;
 
-    Plan get_plan(size_t ind) const;
+    const Plan& get_plan(size_t ind) const;
     size_t get_num_actions(const plan_set& set) const;
     size_t get_num_actions(size_t ind) const;
     void plan_to_set(plan_set &set_a, const Plan &plan, bool plans_as_multisets) const;
@@ -111,8 +111,11 @@ protected:
     std::vector<Plan> _plans;
 
     std::string get_metric_name(bool stability, bool state, bool uniqueness) const;
+    void print_plan(size_t ind);
     void print_plans(const std::vector<size_t>& selected_plan_indexes);
     void print_all_plans();
+    void print_plans_json(const std::vector<size_t>& selected_plan_indexes, std::ostream& os);
+    void print_all_plans_json(std::ostream& os);
 
     float compute_score_for_pair(bool stability, bool state, bool uniqueness,
             size_t plan_index1, size_t plan_index2);

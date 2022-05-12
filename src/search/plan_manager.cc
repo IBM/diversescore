@@ -139,3 +139,26 @@ void PlanManager::load_plans(std::vector<Plan> &plans, const TaskProxy &task_pro
         plans.push_back(plan);
     }
 }
+
+
+void PlanManager::dump_plan_json(const Plan &plan, const TaskProxy &task_proxy, std::ostream& os) const {
+    int plan_cost = calculate_plan_cost(plan, task_proxy);
+    os << "{ ";
+    os << "\"cost\" : " << plan_cost << "," << endl; 
+    os << "\"actions\" : [" << endl;
+    if (plan.size() > 0) {
+
+        OperatorsProxy operators = task_proxy.get_operators();
+        bool first = true;
+        for (OperatorID op_id : plan) {
+            if (first) {
+                first = false;
+            } else {
+                os << ", ";
+            }
+            os << "\""  << operators[op_id].get_name() << "\"";
+        }
+    }
+    os << "]";
+    os << "}" << endl;
+}

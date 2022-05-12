@@ -22,9 +22,13 @@ using namespace std;
 DiversityScoreSubset::DiversityScoreSubset(const Options &opts) : DiversityScore(opts),
         plans_subset_size(opts.get<int>("plans_subset_size")),
         exact_method(opts.get<bool>("exact_method")),
-        dump_plans(opts.get<bool>("dump_plans"))
+        dump_plans(opts.get<bool>("dump_plans")),
+        dump_json(opts.contains("json_file_to_dump")),
+        json_filename("")
 {
-
+    if (dump_json) {
+        json_filename = opts.get<string>("json_file_to_dump");
+    }
 }
 
 
@@ -38,6 +42,10 @@ void DiversityScoreSubset::compute_metrics() {
         compute_metrics_exact_set();
         if (dump_plans) {
             print_all_plans();
+            if (dump_json) {
+                ofstream os(json_filename.c_str());                
+                print_all_plans_json(os);
+            }
         }
         return;
     }
@@ -54,6 +62,10 @@ void DiversityScoreSubset::compute_metrics() {
                     if (dump_plans) {
                         cout << "Found plans for metric " << get_metric_name(stability, state, uniqueness) << endl;
                         print_plans(selected_plan_indexes);
+                        if (dump_json) {
+                            ofstream os(json_filename.c_str());                
+                            print_plans_json(selected_plan_indexes, os);
+                        }
                     }
                 }
             }
@@ -69,6 +81,10 @@ void DiversityScoreSubset::compute_metrics() {
         if (dump_plans) {
             cout << "Found plans for metric " << get_metric_name(compute_stability_metric, compute_states_metric, compute_uniqueness_metric) << endl;
             print_plans(selected_plan_indexes);
+            if (dump_json) {
+                ofstream os(json_filename.c_str());                
+                print_plans_json(selected_plan_indexes, os);
+            }
         }
     }
 }

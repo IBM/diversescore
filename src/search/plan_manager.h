@@ -42,6 +42,7 @@ public:
         bool generates_multiple_plan_files = false);
 
     void load_plans(std::vector<Plan> &plans, const TaskProxy &task_proxy) const;
+    void dump_plan_json(const Plan &plan, const TaskProxy &task_proxy, std::ostream& os) const;
 
 };
 

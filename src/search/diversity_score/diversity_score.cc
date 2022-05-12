@@ -280,24 +280,50 @@ void DiversityScore::plan_to_set(plan_set &set_a, const Plan &plan, bool plans_a
 }
 
 
+void DiversityScore::print_plan(size_t ind) {
+    cout << "---------------------------------------------" << endl 
+         << "Plan index: " << ind << endl;
+    const Plan& plan = get_plan(ind);
+    plan_manager.save_plan(plan, task_proxy, true);
+}
+
+
 void DiversityScore::print_plans(const std::vector<size_t>& selected_plan_indexes) {
     for (size_t ind : selected_plan_indexes) {
-        cout << "---------------------------------------------" << endl 
-             << "Plan index: " << ind << endl;
-        size_t plan_ind = ordered_plan_indexes[ind].first;
-        const Plan& plan = _plans[plan_ind];
-        plan_manager.save_plan(plan, task_proxy, true);
+        print_plan(ind);
     }
 }
 
+
 void DiversityScore::print_all_plans() {
     for (size_t ind =0; ind < ordered_plan_indexes.size(); ++ind) {
-        cout << "---------------------------------------------" << endl 
-             << "Plan index: " << ind << endl;
-        size_t plan_ind = ordered_plan_indexes[ind].first;
-        const Plan& plan = _plans[plan_ind];
-        plan_manager.save_plan(plan, task_proxy, true);
+        print_plan(ind);
     }
+}
+
+
+void DiversityScore::print_plans_json(const std::vector<size_t>& selected_plan_indexes, std::ostream& os) {
+    os << "{ \"plans\" : [" << endl;
+    bool first_dumped = false;
+    for (size_t ind : selected_plan_indexes) {
+        if (first_dumped)
+            os << "," << endl;
+        plan_manager.dump_plan_json(get_plan(ind), task_proxy, os);
+        first_dumped = true;
+    }
+    os << "]}" << endl;
+}
+
+void DiversityScore::print_all_plans_json(std::ostream& os) {
+    os << "{ \"plans\" : [" << endl;
+    bool first_dumped = false;
+    for (size_t ind =0; ind < ordered_plan_indexes.size(); ++ind) {
+        if (first_dumped)
+            os << "," << endl;
+        plan_manager.dump_plan_json(get_plan(ind), task_proxy, os);
+        first_dumped = true;
+    }
+    os << "]}" << endl;
 }
 
 
@@ -314,7 +340,7 @@ size_t DiversityScore::get_num_actions(size_t ind) const {
 }
 
 
-Plan DiversityScore::get_plan(size_t ind) const {
+const Plan& DiversityScore::get_plan(size_t ind) const {
     size_t plan_ind = ordered_plan_indexes[ind].first;
     return _plans[plan_ind];
 }
@@ -817,6 +843,9 @@ void add_diversity_score_subset_options_to_parser(OptionParser &parser) {
     parser.add_option<bool>("exact_method", "Computing the subset using exact method, generating mip", "false");
 
     parser.add_option<bool>("dump_plans", "Dumping (subset of) plans", "false");
+    parser.add_option<string>("json_file_to_dump",
+        "A path to the json file to use for dumping",
+        OptionParser::NONE);
 }
 
 void add_diversity_score_subset_bounded_options_to_parser(OptionParser &parser) {
