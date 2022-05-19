@@ -10,6 +10,7 @@
 #include <math.h>       /* fabs */
 
 #include <algorithm>
+#include <cctype>
 #include <cassert>
 #include <fstream>
 #include <iostream>
@@ -30,6 +31,7 @@ DiversityScore::DiversityScore(const Options &opts) :
         use_cache(opts.get<bool>("use_cache")),
         similarity(opts.get<bool>("similarity")),
         reduce_labels(opts.get<bool>("reduce_labels")),
+        reduce_skip_unmentioned(opts.get<bool>("reduce_skip_unmentioned")),
         discounted_prefixes(opts.get<bool>("discounted_prefixes")),
         discount_factor((float)opts.get<double>("discount_factor")),
         plans_seed_set_size(opts.get<int>("plans_seed_set_size")),
@@ -85,6 +87,8 @@ void DiversityScore::read_label_reduction(string file) {
         op_name = row[0];
         reduced_label = row[1];
 
+        // Transforming to lowercase
+        std::transform(op_name.begin(), op_name.end(), op_name.begin(), [](unsigned char c){ return std::tolower(c); });
         //cout << op_name << endl;
         //  Getting the operator id from name
         auto it = ops_by_names.find(op_name);
@@ -129,6 +133,10 @@ OperatorID DiversityScore::get_reduced_label(OperatorID op) const {
     }
     auto it = label_reduction.find(op);
     if (it == label_reduction.end()) {
+        // Label is not mentioned
+        if (reduce_skip_unmentioned) {
+            return OperatorID(-1);
+        }
         return op;
     }
     return it->second;
@@ -268,6 +276,9 @@ void DiversityScore::prepare_plans() {
 void DiversityScore::plan_to_set(plan_set &set_a, const Plan &plan, bool plans_as_multisets) const {
     for (auto op : plan) {
         int op_no = get_reduced_label(op).get_index();
+        if (op_no == -1) {
+            continue;
+        }
         size_t num_elems = 1;
         if (plans_as_multisets) {
             auto e = set_a.find(op_no);
@@ -822,6 +833,8 @@ void add_diversity_score_options_to_parser(OptionParser &parser) {
     parser.add_option<double>("discount_factor", "Discount factor", "0.99");
 
     parser.add_option<bool>("reduce_labels", "Perform label reduction", "false");
+    parser.add_option<bool>("reduce_skip_unmentioned", "If a label is not mentioned, skip it. If this value is false, unmentioned are mapped to themselves", "true");
+    
     parser.add_option<string>("label_reduction_file", "CSV file containing the label reduction. \
                                 Computing the similarity based on reduced action sequences (stability/uniqueness)", "false");
 

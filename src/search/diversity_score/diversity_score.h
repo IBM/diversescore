@@ -38,6 +38,7 @@ class DiversityScore {
     bool use_cache;
     bool similarity;
     bool reduce_labels;
+    bool reduce_skip_unmentioned;
     bool discounted_prefixes;
     float discount_factor;
     PlanManager plan_manager;
