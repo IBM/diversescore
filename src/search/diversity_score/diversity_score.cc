@@ -97,12 +97,13 @@ void DiversityScore::read_label_reduction(string file) {
             string op_name_trailing_space = op_name + " ";
             it = ops_by_names.find(op_name_trailing_space);
             if (it == ops_by_names.end()) {
-                cerr << "#" << op_name << "#   Operator not found!!!" << endl;
-                cerr << "Operator names:" << endl;
-                for (auto name : ops_by_names) {
-                    cerr << "#" << name.first << "#" << endl;
-                }
-                utils::exit_with(utils::ExitCode::SEARCH_INPUT_ERROR);
+                cout << "Warning! operator #" << op_name << "# not found in the sas+. This could be due to operator not surviving the translation step." << endl;
+                // cerr << "Operator names:" << endl;
+                // for (auto name : ops_by_names) {
+                //     cerr << "#" << name.first << "#" << endl;
+                // }
+                // utils::exit_with(utils::ExitCode::SEARCH_INPUT_ERROR);
+                continue;
             }
         }
         if (ops_by_reduced_labels.find(reduced_label) == ops_by_reduced_labels.end()) {
