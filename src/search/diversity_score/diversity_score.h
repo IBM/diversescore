@@ -38,6 +38,7 @@ class DiversityScore {
     bool use_cache;
     bool similarity;
     bool reduce_labels;
+    bool labels_lifted;
     bool reduce_skip_unmentioned;
     bool discounted_prefixes;
     float discount_factor;
@@ -50,6 +51,8 @@ class DiversityScore {
     utils::HashMap<OperatorID, OperatorID> label_reduction;
 
     const Plan& get_plan(size_t ind) const;
+    void get_operators_for_label(std::vector<OperatorID>& ids, std::string label, const std::unordered_map<std::string, OperatorID>& ops_by_names) const;
+    bool is_label_matching(std::string label, std::string operator_name) const;
     size_t get_num_actions(const plan_set& set) const;
     size_t get_num_actions(size_t ind) const;
     void plan_to_set(plan_set &set_a, const Plan &plan, bool plans_as_multisets) const;

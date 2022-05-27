@@ -31,6 +31,7 @@ DiversityScore::DiversityScore(const Options &opts) :
         use_cache(opts.get<bool>("use_cache")),
         similarity(opts.get<bool>("similarity")),
         reduce_labels(opts.get<bool>("reduce_labels")),
+        labels_lifted(opts.get<bool>("labels_lifted")),
         reduce_skip_unmentioned(opts.get<bool>("reduce_skip_unmentioned")),
         discounted_prefixes(opts.get<bool>("discounted_prefixes")),
         discount_factor((float)opts.get<double>("discount_factor")),
@@ -90,27 +91,17 @@ void DiversityScore::read_label_reduction(string file) {
         // Transforming to lowercase
         std::transform(op_name.begin(), op_name.end(), op_name.begin(), [](unsigned char c){ return std::tolower(c); });
         //cout << op_name << endl;
-        //  Getting the operator id from name
-        auto it = ops_by_names.find(op_name);
-        if (it == ops_by_names.end()) {
-            // Trying adding a trailing space
-            string op_name_trailing_space = op_name + " ";
-            it = ops_by_names.find(op_name_trailing_space);
-            if (it == ops_by_names.end()) {
-                cout << "Warning! operator #" << op_name << "# not found in the sas+. This could be due to operator not surviving the translation step." << endl;
-                // cerr << "Operator names:" << endl;
-                // for (auto name : ops_by_names) {
-                //     cerr << "#" << name.first << "#" << endl;
-                // }
-                // utils::exit_with(utils::ExitCode::SEARCH_INPUT_ERROR);
-                continue;
-            }
-        }
+        //  Getting the operator ids from name
+        vector<OperatorID> op_ids;
+        get_operators_for_label(op_ids, op_name, ops_by_names);
         if (ops_by_reduced_labels.find(reduced_label) == ops_by_reduced_labels.end()) {
             // Adding an empty set
             ops_by_reduced_labels.insert(std::make_pair(reduced_label, utils::HashSet<OperatorID>()));
         }
-        ops_by_reduced_labels[reduced_label].insert(it->second);
+        for (OperatorID op_id: op_ids) {
+            cout << "Operator " << task_proxy.get_operators()[op_id].get_name() << " is reduced to " << reduced_label << endl;
+            ops_by_reduced_labels[reduced_label].insert(op_id);        
+        }
     }
 
     // Finding a representative for each class (no matter what the reduced label is)
@@ -127,6 +118,26 @@ void DiversityScore::read_label_reduction(string file) {
         }
     }
 }
+
+bool DiversityScore::is_label_matching(std::string label, std::string operator_name) const {
+    if (labels_lifted) {
+        // Get the lifted name from the operator (first word) 
+        size_t pos = operator_name.find(" ");
+        string lifted_name = operator_name.substr(0, pos);
+        return label.compare(lifted_name) == 0;
+    }
+    return label.compare(operator_name) == 0;
+}
+
+
+void DiversityScore::get_operators_for_label(vector<OperatorID>& ids, string label, const unordered_map<string, OperatorID>& ops_by_names) const {
+    for (auto const& op : ops_by_names) {
+        if (is_label_matching(label, op.first)) {
+            ids.push_back(op.second);
+        }
+    }
+}
+
 
 OperatorID DiversityScore::get_reduced_label(OperatorID op) const {
     if (!reduce_labels) {
@@ -835,6 +846,7 @@ void add_diversity_score_options_to_parser(OptionParser &parser) {
 
     parser.add_option<bool>("reduce_labels", "Perform label reduction", "false");
     parser.add_option<bool>("reduce_skip_unmentioned", "If a label is not mentioned, skip it. If this value is false, unmentioned are mapped to themselves", "true");
+    parser.add_option<bool>("labels_lifted", "Treat labels as lifted actions names", "true");
     
     parser.add_option<string>("label_reduction_file", "CSV file containing the label reduction. \
                                 Computing the similarity based on reduced action sequences (stability/uniqueness)", "false");

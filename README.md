@@ -62,6 +62,9 @@ Additional example specifications:
 ```
 
 ### Selecting subset using label reduction
+All labels that are not matched are skipped. Note the following options:
+* reduce_skip_unmentioned (default true) -- If a label is not mentioned, skip it. If this value is false, unmentioned are mapped to themselves.
+* labels_lifted (default true) -- Treat labels as lifted actions names. If this value is false, labels are treated as ground actions names.
 ```
 --diversity-score "subset(compute_stability_metric=true,aggregator_metric=avg,plans_as_multisets=false,plans_subset_size=3,exact_method=false,dump_plans=true,label_reduction_file=lr.csv, reduce_labels=true)" --internal-plan-files-path plans --internal-num-plans-to-read 10
 ```
